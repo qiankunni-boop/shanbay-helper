@@ -1,11 +1,9 @@
 # -*- coding: utf-8 -*-
 """
-舆情助手 V50 极致话术版
-核心升级：
-1. 【去伪存真】：移除红绿灯定级，默认用户已处于不满状态。
-2. 【三维话术】：针对同一问题，生成“卑微求饶”、“专业解决”、“幽默共情”三套方案。
-3. 【心理洞察】：分析用户潜台词，辅助运营判断真实诉求。
-4. 【部署支持】：请确保仓库中有 requirements.txt 包含 pandas。
+舆情助手 V51 修复版
+1. 召回【官方后台跳转】按钮。
+2. 保留【三维话术】与【心理洞察】核心功能。
+3. 修复侧边栏布局。
 """
 
 import streamlit as st
@@ -24,13 +22,13 @@ from streamlit_paste_button import paste_image_button
 # ==========================================
 
 # 👇👇👇 请将您的 DeepSeek API Key 粘贴在下方 👇👇👇
-FIXED_API_KEY = "sk-99458a2eb9a3465886f3394d7ec6da69" 
+FIXED_API_KEY = "" 
 
 # ==========================================
 # 1. 基础配置
 # ==========================================
 
-st.set_page_config(page_title="扇贝舆情话术舱 (V50)", layout="wide", page_icon="🐚")
+st.set_page_config(page_title="扇贝舆情话术舱 (V51)", layout="wide", page_icon="🐚")
 
 @st.cache_resource
 def load_ocr_model():
@@ -56,7 +54,7 @@ def extract_text(image):
         return f"识别出错: {str(e)}"
 
 # ==========================================
-# 2. 核心逻辑 (JSON 清洗 + 高级 Prompt)
+# 2. 核心逻辑
 # ==========================================
 
 def clean_and_parse_json(text):
@@ -84,14 +82,14 @@ def call_deepseek_api(system_prompt, user_text, api_key):
                 {"role": "user", "content": user_text},
             ],
             stream=False,
-            temperature=0.8, #稍微提高温度，增加文案灵活性
+            temperature=0.8,
             response_format={ "type": "json_object" }
         )
         return clean_and_parse_json(response.choices[0].message.content)
     except Exception as e:
         return {"error": f"API 调用失败: {str(e)}"}
 
-# --- V50 极致话术 Prompt ---
+# --- Prompt ---
 PROMPT_V50 = """
 你现在是【扇贝单词】的首席用户体验官（也是小红书文案大神）。
 运营人员手动输入了一条用户的负面/咨询评论，请提供极致的回复策略。
@@ -119,11 +117,14 @@ PROMPT_V50 = """
 # 3. Streamlit UI 界面
 # ==========================================
 
-st.title("🐚 扇贝舆情话术舱 V50")
+st.title("🐚 扇贝舆情话术舱 V51")
 st.caption("针对已发现舆情 -> 生成高颗粒度回复方案")
 
 # --- 侧边栏 ---
 with st.sidebar:
+    st.header("⚙️ 控制台")
+    
+    # API Key 逻辑
     if FIXED_API_KEY:
         api_key = FIXED_API_KEY
         st.success("✅ API Key 已就绪")
@@ -135,10 +136,16 @@ with st.sidebar:
             api_key = st.text_input("DeepSeek Key", type="password")
     
     st.markdown("---")
+    
+    # ✅ 修复点：加回了官方后台跳转按钮
+    st.link_button("🔗 打开官方反馈后台", "https://web.shanbay.com/words/app/feedback?shanbay_immersive_mode=true#/")
+    
+    st.markdown("---")
+    st.markdown("### 📊 数据导出")
     if st.button("📥 导出今日处理记录 (CSV)"):
         if st.session_state.logs:
             df = pd.DataFrame(st.session_state.logs)
-            st.download_button("下载 CSV", df.to_csv(index=False).encode('utf-8-sig'), "shanbay_replies.csv", "text/csv")
+            st.download_button("点击下载 CSV", df.to_csv(index=False).encode('utf-8-sig'), "shanbay_replies.csv", "text/csv")
         else:
             st.warning("暂无记录")
 
@@ -153,7 +160,7 @@ with c1:
         label="📋 粘贴截图 (Ctrl+V)",
         background_color="#3182ce",
         text_color="#ffffff",
-        key="paste_v50"
+        key="paste_v51"
     )
     
     if paste_result.image_data:
@@ -167,13 +174,11 @@ with c1:
 with c2:
     st.markdown("##### 2. 话术生成配置")
     
-    # 自动回填 OCR
     if extracted_text:
-        st.session_state['v50_input'] = extracted_text
+        st.session_state['v51_input'] = extracted_text
         
-    user_text = st.text_area("用户评论内容", height=100, key="v50_input", placeholder="例如：你们新版背单词太卡了，会员白充了！")
+    user_text = st.text_area("用户评论内容", height=100, key="v51_input", placeholder="例如：你们新版背单词太卡了，会员白充了！")
     
-    # 事实注入 - 依然保留，保证回复不瞎编
     context_info = st.text_input(
         "🔧 内部事实/限制 (Context)", 
         placeholder="例如：技术已在修复预计10分钟好；无法退款但送7天会员...",
@@ -192,38 +197,26 @@ with c2:
             if "error" in res:
                 st.error(res["error"])
             else:
-                # --- 结果展示区 ---
                 st.divider()
-                
-                # 1. 心理洞察
                 st.info(f"🧠 **心理洞察**：{res.get('insight')}")
                 
-                # 2. 三种方案 Tabs
-                tab1, tab2, tab3 = st.tabs(["🥺 方案A：软萌示弱", "👔 方案B：专业诚恳", "🤡 方案C：幽默自黑"])
-                
+                tab1, tab2, tab3 = st.tabs(["🥺 软萌示弱", "👔 专业诚恳", "🤡 幽默自黑"])
                 options = res.get('options', {})
                 
                 with tab1:
                     st.code(options.get('style_soft'), language=None)
-                    st.caption("适用：想要被哄的用户 / 明显是我们错了的场景")
-                
                 with tab2:
                     st.code(options.get('style_pro'), language=None)
-                    st.caption("适用：较理性的用户 / 涉及功能原理的解释")
-                    
                 with tab3:
                     st.code(options.get('style_humor'), language=None)
-                    st.caption("适用：纯吐槽 / 想要把差评变成神评论")
                 
-                # 3. 私信引导
                 st.markdown("---")
-                st.markdown("**🤫 私信引导话术 (通用)**")
+                st.markdown("**🤫 私信引导话术**")
                 st.code(res.get('reply_dm'), language=None)
                 
-                # 4. 存入日志
                 st.session_state.logs.append({
                     "时间": time.strftime("%H:%M"),
                     "用户内容": user_text[:20],
                     "心理洞察": res.get('insight'),
-                    "采纳方案": "待定(请手动复制)" 
+                    "采纳方案": "待定" 
                 })
