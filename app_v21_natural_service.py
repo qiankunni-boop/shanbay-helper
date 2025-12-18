@@ -1,0 +1,238 @@
+# -*- coding: utf-8 -*-
+"""
+扇贝单词 · 智能舆情助手 (V45 Persona Final)
+核心注入：
+1. 【人设回归】：严格执行用户指定的“宝宝体”和“软性护短”风格。
+   - 必须以“好的，宝宝”开头。
+   - 遇到进度问题，使用“替客服辩解一下，确实在修了，只是排期问题...”的特定句式。
+2. 【双模并存】：保留 V44 的“快速回复”和“深度分析”双模式。
+3. 【稳定架构】：沿用无 iframe 的稳定代码。
+"""
+
+import streamlit as st
+from paddleocr import PaddleOCR
+from PIL import Image
+import numpy as np
+from openai import OpenAI
+import json
+from streamlit_paste_button import paste_image_button
+
+# ==========================================
+# 1. 基础配置
+# ==========================================
+
+st.set_page_config(page_title="扇贝舆情助手 (V45 Persona)", layout="wide")
+
+@st.cache_resource
+def load_ocr_model():
+    return PaddleOCR(use_angle_cls=True, lang='ch')
+
+ocr = load_ocr_model()
+
+def extract_text(image):
+    try:
+        img_array = np.array(image)
+        result = ocr.ocr(img_array, cls=True)
+        texts = [line[1][0] for line in result[0]] if result else []
+        return " ".join(texts)
+    except:
+        return ""
+
+# ==========================================
+# 2. DeepSeek AI 逻辑 (注入灵魂人设)
+# ==========================================
+
+def call_deepseek_api(system_prompt, user_text, api_key):
+    if not api_key:
+        return {"error": "请先在侧边栏输入 DeepSeek API Key"}
+    
+    client = OpenAI(api_key=api_key, base_url="https://api.deepseek.com")
+    try:
+        response = client.chat.completions.create(
+            model="deepseek-chat",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": f"用户评论内容：{user_text}"},
+            ],
+            stream=False,
+            temperature=0.7, 
+            response_format={ "type": "json_object" }
+        )
+        return json.loads(response.choices[0].message.content)
+    except Exception as e:
+        return {"error": f"API 调用失败: {str(e)}"}
+
+# --- 模式一：快速回复 (V45 人设版) ---
+def analyze_fast_mode(text, api_key):
+    prompt = """
+    你现在是【扇贝单词】的贴心助教（人设：温柔、耐心的好朋友）。
+
+    【🗣️ 核心话术风格 (Tone of Voice)】
+    1. **强制开头**：必须以 **“好的，宝宝”** 或 **“宝宝消消气”** 开头。
+    2. **特定句式（替客服说话）**：
+       - 当用户抱怨进度慢、客服不作为时，请使用以下逻辑：
+       - “替我们客服辩解一下，这个功能确实在修了/记下来了，只是因为排期/优先级的问题，暂不清楚什么时候上线，所以可能还需要再等等。”
+    3. **结尾要求**：必须包含歉意，如“非常抱歉给您带来不好的体验”或“抱歉让你久等了”。
+
+    【🚫 禁忌】
+    - 严禁编造“底层架构”等虚假大词，用“排期紧张/慎重测试”等真实理由。
+    - 不要像个机器人一样冷冰冰。
+
+    【输出格式 (JSON)】
+    {
+        "scene": "...",
+        "bug_type": "...",
+        "reply_standard": "标准版回复 (60字内，按上述风格)",
+        "reply_empathy": "共情版回复 (60字内，更软萌一点)"
+    }
+    """
+    return call_deepseek_api(prompt, text, api_key)
+
+# --- 模式二：深度分析 (结构教练 + 人设润色) ---
+def analyze_deep_mode(text, api_key):
+    prompt = """
+    你现在是【扇贝单词】的运营导师。请基于**“软性护短 + 诚恳示弱”**的人设提供思路。
+
+    【任务 1：话术结构拆解】
+    - Step 1: 情绪承接 (必须叫宝宝，先认错)
+    - Step 2: 解释原因 (用“替客服辩解一下/排期问题”的逻辑)
+    - Step 3: 收尾 (诚恳道歉)
+
+    【任务 2：文案示范】
+    写出符合以下风格的回复：
+    “好的，宝宝...替客服辩解一下...非常抱歉...”
+
+    【输出格式 (JSON)】
+    {
+        "user_emotion": "...",
+        "structure_guide": [
+            {"step": "1. 唤称与承接", "tips": "叫宝宝，接纳情绪..."},
+            {"step": "2. 软性解释", "tips": "用排期/资源理由替团队辩解..."},
+            {"step": "3. 诚恳收尾", "tips": "再次道歉..."}
+        ],
+        "reply_polished": "最终建议的回复文案"
+    }
+    """
+    return call_deepseek_api(prompt, text, api_key)
+
+# ==========================================
+# 3. Streamlit UI 界面
+# ==========================================
+
+st.title("💖 扇贝舆情助手 (V45 Persona)")
+
+# --- 侧边栏 ---
+with st.sidebar:
+    st.header("⚙️ 控制台")
+    api_key = st.text_input("DeepSeek API Key", type="password")
+    
+    st.markdown("---")
+    st.markdown("### 🎛️ 模式切换")
+    mode = st.radio(
+        "选择功能模式",
+        ["🚀 快速回复模式", "🧠 深度分析/润色"],
+        captions=["日常 Bug 处理 (人设增强版)", "复杂吐槽/思维卡壳时使用"]
+    )
+    
+    st.markdown("---")
+    st.link_button("🔗 打开官方反馈后台", "https://web.shanbay.com/words/app/feedback?shanbay_immersive_mode=true#/")
+
+# ==========================================
+# 模式 A：快速回复
+# ==========================================
+if mode == "🚀 快速回复模式":
+    st.subheader("🚀 快速回复生成")
+    st.caption("✨ 风格：宝宝体 | 替客服辩解 | 诚恳道歉")
+    
+    c1, c2 = st.columns([1, 1])
+    content = ""
+
+    with c1:
+        tab_paste, tab_upload = st.tabs(["📋 粘贴截图", "📂 上传图片"])
+        with tab_paste:
+            paste_result = paste_image_button(
+                label="点此粘贴截图 (Ctrl+V)",
+                background_color="#ff7875", # 换个暖色调
+                hover_background_color="#ff4d4f",
+                text_color="#ffffff",
+                key="paste_fast"
+            )
+            if paste_result.image_data is not None:
+                st.image(paste_result.image_data, width=280)
+                if st.button("开始分析", key="btn_ocr_fast"):
+                    with st.spinner("OCR 读取中..."):
+                        content = extract_text(paste_result.image_data)
+        with tab_upload:
+            img_file = st.file_uploader("上传文件", type=["png", "jpg"], key="up_fast")
+            if img_file:
+                img = Image.open(img_file)
+                st.image(img, width=280)
+                if st.button("开始分析", key="btn_ocr_up_fast"):
+                    content = extract_text(img)
+
+    with c2:
+        text_input = st.text_area("或直接粘贴文字", height=150, key="text_fast")
+        if st.button("生成回复", key="btn_text_fast"):
+            content = text_input
+
+        if content:
+            if not api_key:
+                st.error("请填入 API Key")
+            else:
+                st.divider()
+                with st.spinner("DeepSeek 正在注入灵魂..."):
+                    result = analyze_fast_mode(content, api_key)
+                
+                if "error" in result:
+                    st.error(result["error"])
+                else:
+                    scene = result.get('scene', '未知')
+                    bug_type = result.get('bug_type', '无')
+                    st.markdown(f"**🎯 场景:** `{scene}` | **🔍 问题:** `{bug_type}`")
+                    
+                    st.info(f"**🔹 标准版:**\n{result.get('reply_standard')}")
+                    st.success(f"**🔸 共情版:**\n{result.get('reply_empathy')}")
+
+# ==========================================
+# 模式 B：深度分析
+# ==========================================
+elif mode == "🧠 深度分析/润色":
+    st.subheader("🧠 话术结构教练")
+    st.caption("功能：分析情绪 -> 拆解结构 -> 生成【宝宝体】文案")
+
+    user_input = st.text_area("在此粘贴让你头疼/卡壳的用户吐槽...", height=150)
+    
+    if st.button("✨ 帮我理清思路", key="btn_deep"):
+        if not user_input:
+            st.warning("请先输入内容")
+        elif not api_key:
+            st.error("请填入 API Key")
+        else:
+            with st.spinner("正在拆解话术逻辑..."):
+                result = analyze_deep_mode(user_input, api_key)
+            
+            if "error" in result:
+                st.error(result["error"])
+            else:
+                emotion = result.get('user_emotion', '未知')
+                st.markdown(f"### 🌡️ 情绪诊断: `{emotion}`")
+                
+                st.markdown("### 🏗️ 回复逻辑拆解")
+                steps = result.get('structure_guide', [])
+                
+                cols = st.columns(len(steps))
+                for i, step_data in enumerate(steps):
+                    with cols[i]:
+                        st.markdown(f"**{step_data['step']}**")
+                        st.info(step_data['tips'])
+                
+                st.markdown("---")
+                
+                st.markdown("### ✍️ 建议回复示范")
+                st.markdown(f"""
+                <div style="background-color:#fff1f0; padding:20px; border-radius:10px; border-left: 5px solid #ff4d4f; color: #595959; font-size:16px;">
+                    {result.get('reply_polished')}
+                </div>
+                """, unsafe_allow_html=True)
+                st.text("")
+                st.code(result.get('reply_polished'), language=None)
