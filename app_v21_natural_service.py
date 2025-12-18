@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-扇贝单词 · 智能舆情助手 (V47 Fixed Key)
+舆情助手
 核心升级：
 1. 【免输 Key】：支持在代码头部配置固定 API Key，启动即用，拒绝重复劳动。
 2. 【轻量稳定】：沿用 V46 的 RapidOCR + 无 iframe 稳定架构。
@@ -127,7 +127,7 @@ def analyze_deep_mode(text, api_key):
 # 3. Streamlit UI 界面
 # ==========================================
 
-st.title("💖 扇贝舆情助手 (V47 Fixed)")
+st.title("舆情助手")
 st.caption("状态：免输 Key 版 | 内核：RapidOCR Lite")
 
 # --- 侧边栏 ---
