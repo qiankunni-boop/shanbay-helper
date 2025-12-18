@@ -22,7 +22,7 @@ from streamlit_paste_button import paste_image_button
 # ==========================================
 
 # 👇👇👇 请将您的 DeepSeek API Key 粘贴在下方 👇👇👇
-FIXED_API_KEY = "" 
+FIXED_API_KEY = "sk-99458a2eb9a3465886f3394d7ec6da69 
 
 # ==========================================
 # 1. 基础配置
