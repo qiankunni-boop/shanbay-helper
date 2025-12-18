@@ -1,16 +1,14 @@
 # -*- coding: utf-8 -*-
 """
-扇贝单词 · 智能舆情助手 (V45 Persona Final)
-核心注入：
-1. 【人设回归】：严格执行用户指定的“宝宝体”和“软性护短”风格。
-   - 必须以“好的，宝宝”开头。
-   - 遇到进度问题，使用“替客服辩解一下，确实在修了，只是排期问题...”的特定句式。
-2. 【双模并存】：保留 V44 的“快速回复”和“深度分析”双模式。
-3. 【稳定架构】：沿用无 iframe 的稳定代码。
+扇贝单词 · 智能舆情助手 (V47 Fixed Key)
+核心升级：
+1. 【免输 Key】：支持在代码头部配置固定 API Key，启动即用，拒绝重复劳动。
+2. 【轻量稳定】：沿用 V46 的 RapidOCR + 无 iframe 稳定架构。
+3. 【全能人设】：保留“宝宝体”、“替客服辩解”等所有高情商逻辑。
 """
 
 import streamlit as st
-from paddleocr import PaddleOCR
+from rapidocr_onnxruntime import RapidOCR
 from PIL import Image
 import numpy as np
 from openai import OpenAI
@@ -18,33 +16,43 @@ import json
 from streamlit_paste_button import paste_image_button
 
 # ==========================================
+# 0. 全局配置区 (在这里填入 Key)
+# ==========================================
+
+# 👇👇👇 请将您的 DeepSeek API Key 粘贴在下方引号内 👇👇👇
+FIXED_API_KEY = "" 
+# 例如：FIXED_API_KEY = "sk-99458a2eb9a3465886f3394d7ec6da69"
+
+# ==========================================
 # 1. 基础配置
 # ==========================================
 
-st.set_page_config(page_title="扇贝舆情助手 (V45 Persona)", layout="wide")
+st.set_page_config(page_title="扇贝舆情助手 (V47 Fixed)", layout="wide")
 
 @st.cache_resource
 def load_ocr_model():
-    return PaddleOCR(use_angle_cls=True, lang='ch')
+    return RapidOCR()
 
 ocr = load_ocr_model()
 
 def extract_text(image):
     try:
         img_array = np.array(image)
-        result = ocr.ocr(img_array, cls=True)
-        texts = [line[1][0] for line in result[0]] if result else []
+        result, _ = ocr(img_array)
+        if not result:
+            return ""
+        texts = [line[1] for line in result]
         return " ".join(texts)
-    except:
-        return ""
+    except Exception as e:
+        return f"识别出错: {str(e)}"
 
 # ==========================================
-# 2. DeepSeek AI 逻辑 (注入灵魂人设)
+# 2. DeepSeek AI 逻辑
 # ==========================================
 
 def call_deepseek_api(system_prompt, user_text, api_key):
     if not api_key:
-        return {"error": "请先在侧边栏输入 DeepSeek API Key"}
+        return {"error": "未检测到 API Key，请在代码头部配置或在侧边栏输入"}
     
     client = OpenAI(api_key=api_key, base_url="https://api.deepseek.com")
     try:
@@ -62,20 +70,20 @@ def call_deepseek_api(system_prompt, user_text, api_key):
     except Exception as e:
         return {"error": f"API 调用失败: {str(e)}"}
 
-# --- 模式一：快速回复 (V45 人设版) ---
+# --- 模式一：快速回复 ---
 def analyze_fast_mode(text, api_key):
     prompt = """
     你现在是【扇贝单词】的贴心助教（人设：温柔、耐心的好朋友）。
 
-    【🗣️ 核心话术风格 (Tone of Voice)】
+    【🗣️ 核心话术风格】
     1. **强制开头**：必须以 **“好的，宝宝”** 或 **“宝宝消消气”** 开头。
     2. **特定句式（替客服说话）**：
-       - 当用户抱怨进度慢、客服不作为时，请使用以下逻辑：
+       - 遇到进度慢/功能Bug：
        - “替我们客服辩解一下，这个功能确实在修了/记下来了，只是因为排期/优先级的问题，暂不清楚什么时候上线，所以可能还需要再等等。”
-    3. **结尾要求**：必须包含歉意，如“非常抱歉给您带来不好的体验”或“抱歉让你久等了”。
+    3. **结尾要求**：必须包含歉意。
 
     【🚫 禁忌】
-    - 严禁编造“底层架构”等虚假大词，用“排期紧张/慎重测试”等真实理由。
+    - 严禁编造“底层架构”等虚假大词。
     - 不要像个机器人一样冷冰冰。
 
     【输出格式 (JSON)】
@@ -88,7 +96,7 @@ def analyze_fast_mode(text, api_key):
     """
     return call_deepseek_api(prompt, text, api_key)
 
-# --- 模式二：深度分析 (结构教练 + 人设润色) ---
+# --- 模式二：深度分析 ---
 def analyze_deep_mode(text, api_key):
     prompt = """
     你现在是【扇贝单词】的运营导师。请基于**“软性护短 + 诚恳示弱”**的人设提供思路。
@@ -119,19 +127,28 @@ def analyze_deep_mode(text, api_key):
 # 3. Streamlit UI 界面
 # ==========================================
 
-st.title("💖 扇贝舆情助手 (V45 Persona)")
+st.title("💖 扇贝舆情助手 (V47 Fixed)")
+st.caption("状态：免输 Key 版 | 内核：RapidOCR Lite")
 
 # --- 侧边栏 ---
 with st.sidebar:
     st.header("⚙️ 控制台")
-    api_key = st.text_input("DeepSeek API Key", type="password")
+    
+    # --- 核心修改：API Key 自动检测逻辑 ---
+    if FIXED_API_KEY:
+        api_key = FIXED_API_KEY
+        st.success("✅ API Key 已从代码加载")
+        st.caption(f"尾号: ...{FIXED_API_KEY[-4:]}")
+    else:
+        api_key = st.text_input("DeepSeek API Key", type="password")
+        st.caption("💡 提示：在代码第25行填入 Key 可免输")
     
     st.markdown("---")
     st.markdown("### 🎛️ 模式切换")
     mode = st.radio(
         "选择功能模式",
         ["🚀 快速回复模式", "🧠 深度分析/润色"],
-        captions=["日常 Bug 处理 (人设增强版)", "复杂吐槽/思维卡壳时使用"]
+        captions=["日常 Bug 处理", "复杂吐槽/思维卡壳"]
     )
     
     st.markdown("---")
@@ -142,7 +159,6 @@ with st.sidebar:
 # ==========================================
 if mode == "🚀 快速回复模式":
     st.subheader("🚀 快速回复生成")
-    st.caption("✨ 风格：宝宝体 | 替客服辩解 | 诚恳道歉")
     
     c1, c2 = st.columns([1, 1])
     content = ""
@@ -152,7 +168,7 @@ if mode == "🚀 快速回复模式":
         with tab_paste:
             paste_result = paste_image_button(
                 label="点此粘贴截图 (Ctrl+V)",
-                background_color="#ff7875", # 换个暖色调
+                background_color="#ff7875",
                 hover_background_color="#ff4d4f",
                 text_color="#ffffff",
                 key="paste_fast"
@@ -177,7 +193,7 @@ if mode == "🚀 快速回复模式":
 
         if content:
             if not api_key:
-                st.error("请填入 API Key")
+                st.error("请先配置 API Key")
             else:
                 st.divider()
                 with st.spinner("DeepSeek 正在注入灵魂..."):
@@ -198,7 +214,6 @@ if mode == "🚀 快速回复模式":
 # ==========================================
 elif mode == "🧠 深度分析/润色":
     st.subheader("🧠 话术结构教练")
-    st.caption("功能：分析情绪 -> 拆解结构 -> 生成【宝宝体】文案")
 
     user_input = st.text_area("在此粘贴让你头疼/卡壳的用户吐槽...", height=150)
     
@@ -206,7 +221,7 @@ elif mode == "🧠 深度分析/润色":
         if not user_input:
             st.warning("请先输入内容")
         elif not api_key:
-            st.error("请填入 API Key")
+            st.error("请先配置 API Key")
         else:
             with st.spinner("正在拆解话术逻辑..."):
                 result = analyze_deep_mode(user_input, api_key)
@@ -214,12 +229,9 @@ elif mode == "🧠 深度分析/润色":
             if "error" in result:
                 st.error(result["error"])
             else:
-                emotion = result.get('user_emotion', '未知')
-                st.markdown(f"### 🌡️ 情绪诊断: `{emotion}`")
+                st.markdown(f"### 🌡️ 情绪诊断: `{result.get('user_emotion', '未知')}`")
                 
-                st.markdown("### 🏗️ 回复逻辑拆解")
                 steps = result.get('structure_guide', [])
-                
                 cols = st.columns(len(steps))
                 for i, step_data in enumerate(steps):
                     with cols[i]:
