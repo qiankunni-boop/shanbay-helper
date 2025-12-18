@@ -1,6 +1,7 @@
 streamlit
+pandas
 openai
+rapidocr-onnxruntime
 streamlit-paste-button
 Pillow
 numpy
-rapidocr-onnxruntime
