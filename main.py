@@ -30,7 +30,7 @@ FIXED_API_KEY = "sk-99458a2eb9a3465886f3394d7ec6da69"
 # 1. 基础配置与缓存
 # ==========================================
 
-st.set_page_config(page_title="扇贝舆情话术舱 (V53)", layout="wide", page_icon="🐚")
+st.set_page_config(page_title="舆情话术库", layout="wide", page_icon="🐚")
 
 @st.cache_resource
 def load_ocr_model():
